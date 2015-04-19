@@ -36,18 +36,22 @@ public class TweetWordDistributionBuilder {
     String inUserIdsFilename = args[0];
     String inGridFilename = args[1];
     String splitDate = args[2]; // YYYY-MM-DD
-    
+
     String outGridDistFilename = args[3];
+    String ouWordCountsFilename = args[4];
+    String outPredictionsFilename = args[5];
 
     TweetWordDistributionBuilder distBldr = new TweetWordDistributionBuilder();
-    distBldr.train(inUserIdsFilename, inGridFilename, splitDate, outGridDistFilename);
-    distBldr.test(splitDate);
+    distBldr.train(inUserIdsFilename, inGridFilename, splitDate, outGridDistFilename,
+        ouWordCountsFilename);
+    distBldr.test(splitDate, outPredictionsFilename);
   }
   
   public void train(String inUserIdsFilename, String inGridFilename, String splitDate,
-      String outGridDistFilename) throws FileNotFoundException, InstantiationException,
-      IllegalAccessException, ClassNotFoundException, IOException, SQLException {
-    
+      String outGridDistFilename, String outWordCountsFilename) throws FileNotFoundException,
+      InstantiationException, IllegalAccessException, ClassNotFoundException, IOException,
+      SQLException {
+
     readUserIds(inUserIdsFilename);
     readTweetIdToGridId(inGridFilename);
 
@@ -56,18 +60,43 @@ public class TweetWordDistributionBuilder {
 
     countWordsPerGrid(splitDate);
     countWords();
+    writeWordCounts(outWordCountsFilename);
   }
 
-  public void test(String splitDate) throws SQLException, InstantiationException,
-      IllegalAccessException, ClassNotFoundException, IOException {
-    try (TweetDbHandler dbHandler = new TweetDbHandler();
-        Statement st = dbHandler.getConnection().createStatement();
-        ResultSet rs = st.executeQuery("select t2.user_id, t2.tweet_id, t2.content "
-            + "from twet_venue_new t1 tweet_topic t2"
-            + "where creation_time >= '" + splitDate + "' ")) {
-      while (rs.next()) {
-        if (userIds.contains(rs.getLong(1))) {
-
+  public void test(String splitDate, String outPredictionsFilename) throws SQLException,
+      InstantiationException, IllegalAccessException, ClassNotFoundException, IOException {
+    try (PrintWriter writer = new PrintWriter(new BufferedWriter(new FileWriter(
+          outPredictionsFilename)));
+        TweetDbHandler dbHandler = new TweetDbHandler();
+        Statement st = dbHandler.getConnection().createStatement()) {
+      int pageSize = 10000;
+      st.setFetchSize(pageSize);
+      st.setMaxRows(pageSize);
+      for (long pageNum = 0; true; pageNum++) {
+        try (ResultSet rs = st.executeQuery("select t2.user_id, t1.tweet_id, t1.content "
+            + "from tweet_topic t1, tweet_venue_new t2 " 
+            + "where t2.creation_time >= '" + splitDate + "' and t1.tweet_id = t2.tweet_id " 
+            + "limit " + (pageNum * pageSize) + ", " + pageSize)) {
+          if (!rs.next()) {
+            break;
+          }
+          do {
+            long userId = rs.getLong(1);
+            if (userIds.contains(userId)) {
+              String tweetId = rs.getString(2);
+              int actualGridId = tweetIdToGridIdMap.get(tweetId);
+              int predictedGridId = -1;
+              double predictedGridProb = 0.0;
+              for (Integer gridId : gridProbabDist.keySet()) {
+                double tempPredictedProb = findGridProbabilityGivenWords(gridId, rs.getString(3));
+                if (tempPredictedProb > predictedGridProb) {
+                  predictedGridProb = tempPredictedProb;
+                  predictedGridId = gridId;
+                }
+              }
+              writer.println(userId + "," + tweetId + "," + actualGridId + "," + predictedGridId);
+            }
+          } while (rs.next());
         }
       }
     }
@@ -86,11 +115,19 @@ public class TweetWordDistributionBuilder {
     System.out.println("userIds size: " + userIds.size());
   }
     
-  public Double findGridProbabilityGivenWords(Integer grid, String tweet) {
+  public double findGridProbabilityGivenWords(Integer grid, String tweet) {
     String[] words = tweet.split("\\s+");
-    Double probability = 0.0;
+    double probability = 0.0;
     for (String word : words) {
-      probability *= wordGridCountTable.get(word, grid) / wordCountMap.get(word);
+      Integer wordCountInGrid = wordGridCountTable.get(word, grid);
+      Long wordCount = wordCountMap.get(word);
+      if (wordCountInGrid != null && wordCount != null) {
+        if (probability == 0.0) {
+          probability = ((double) wordCountInGrid) / wordCount;
+        } else {
+          probability *= wordGridCountTable.get(word, grid) / wordCountMap.get(word);
+        }
+      }
     }
     return probability * gridProbabDist.get(grid);
   }
@@ -100,7 +137,7 @@ public class TweetWordDistributionBuilder {
     Set<String> trainTweetIds = new HashSet<String>();
     try (TweetDbHandler dbHandler = new TweetDbHandler();
         Statement st = dbHandler.getConnection().createStatement();
-        ResultSet rs = st.executeQuery("select user_id, tweet_id from twet_venue_new "
+        ResultSet rs = st.executeQuery("select user_id, tweet_id from tweet_venue_new "
             + "where creation_time < '" + splitDate + "' ")) {
       while (rs.next()) {
         if (userIds.contains(rs.getLong(1))) {
@@ -130,23 +167,33 @@ public class TweetWordDistributionBuilder {
       int pageSize = 10000;
       st.setFetchSize(pageSize);
       st.setMaxRows(pageSize);
-      long numRows = dbHandler.getCount("tweet_topic");
-      for (long pageNum = 0; pageNum <= numRows / pageSize; pageNum++) {
-        ResultSet rs = st.executeQuery("select t1.tweet_id, t2.content "
-            + "from tweet_topic t1 twet_venue_new t2 "
-            + "where t2.creation_time < '" + splitDate + "' and t1.tweet_id = t2.tweet_id "
-            + "limit " + (pageNum * pageSize) + ", " + pageSize);
-        while (rs.next()) {
-          String[] words = rs.getString(2).split("\\s+");
-          for (String word : words) {
-            Integer wordCount = wordGridCountTable.get(word, tweetIdToGridIdMap.get(rs.getInt(1)));
-            if (wordCount == null) {
-              wordCount = 1;
-            } else {
-              wordCount++;
-            }
-            wordGridCountTable.put(word, tweetIdToGridIdMap.get(rs.getInt(1)), wordCount);
+      // long numRows = dbHandler.getCount("tweet_topic");
+      // for (long pageNum = 0; pageNum <= numRows / pageSize; pageNum++) {
+      for (long pageNum = 0; true; pageNum++) {
+        try (ResultSet rs = st.executeQuery("select t2.user_id, t1.tweet_id, t1.content "
+            + "from tweet_topic t1, tweet_venue_new t2 "
+            + "where t2.creation_time < '" + splitDate + "' and t1.tweet_id = t2.tweet_id " 
+            + "limit " + (pageNum * pageSize) + ", " + pageSize)) {
+          if (!rs.next()) {
+            break;
           }
+          do {
+            long userId = rs.getLong(1);
+            if (userIds.contains(userId)) {
+              String tweetId = rs.getString(2);
+              String[] words = rs.getString(3).split("\\s+");
+              for (String word : words) {
+                Integer wordCount = wordGridCountTable.get(word,
+                    tweetIdToGridIdMap.get(tweetId));
+                if (wordCount == null) {
+                  wordCount = 1;
+                } else {
+                  wordCount++;
+                }
+                wordGridCountTable.put(word, tweetIdToGridIdMap.get(tweetId), wordCount);
+              }
+            }
+          } while (rs.next());
         }
       }
     }
@@ -190,5 +237,9 @@ public class TweetWordDistributionBuilder {
         writer.println(gridId + "," + gridProbabDist.get(gridId));
       }
     }
+  }
+  
+  private void writeWordCounts(String outWordCountsFilename) {
+    // TODO: Write wordGridCountTable to file
   }
 }
