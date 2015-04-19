@@ -3,7 +3,9 @@ package edu.ncsu.mas.platys.lbsn;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Properties;
 
 public class TweetDbHandler implements AutoCloseable {
@@ -34,5 +36,20 @@ public class TweetDbHandler implements AutoCloseable {
     if (mConn != null) {
       mConn.close();
     }
+  }
+  
+  public Connection getConnection() {
+    return mConn;
+  }
+  
+  public long getCount(String tableName) throws SQLException {
+    long numRows = -1;
+    try (Statement st = mConn.createStatement();
+        ResultSet rs = st.executeQuery("select count(*) from " + tableName + " use index(primary)")) {
+      if (rs.next()) {
+        numRows = rs.getInt(1);
+      }
+    }
+    return numRows;
   }
 }
