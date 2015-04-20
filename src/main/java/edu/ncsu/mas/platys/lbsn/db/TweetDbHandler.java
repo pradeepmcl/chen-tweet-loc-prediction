@@ -1,4 +1,4 @@
-package edu.ncsu.mas.platys.lbsn;
+package edu.ncsu.mas.platys.lbsn.db;
 
 import java.io.IOException;
 import java.sql.Connection;
