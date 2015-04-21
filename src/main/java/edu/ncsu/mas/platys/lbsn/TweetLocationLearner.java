@@ -207,18 +207,14 @@ public class TweetLocationLearner {
   
   public double findGridProbabilityGivenWords(Integer grid, String tweet) {
     String[] words = tweet.split("\\s+");
-    double probability = 0.0;
+    double logProb = Math.log(gridProbDist.get(grid));
     for (String word : words) {
       Double wordGridProb = wordGridProbDist.get(word, grid);
-      if (wordGridProb != null) {
-        if (probability == 0.0) {
-          probability = wordGridProb;
-        } else {
-          probability *= wordGridProb;
-        }
+      if (wordGridProb != null && wordGridProb != 0) {
+        logProb += Math.log(wordGridProb);
       }
     }
-    return probability * gridProbDist.get(grid);
+    return logProb;
   }
   
   public void readModelFromFiles(String gridProbDistFilename, String wordGridProbDistFilename)
