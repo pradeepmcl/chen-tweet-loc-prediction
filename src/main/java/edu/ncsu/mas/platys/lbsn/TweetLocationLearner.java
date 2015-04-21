@@ -54,8 +54,7 @@ public class TweetLocationLearner {
     countWordsPerGrid(splitDate);
     countAndDiscardInfrequentWords(50);
     buildWordAndGridProbabilityDistribution();
-    wordGridCountTable.clear(); // Not required any more
-    wordCountMap.clear(); // Not required any more
+    cleanUp(); // clear unwanted (and space consuming) objects
     writeWordGridProbilityDistribution(outWordGridDistFilename);
   }
 
@@ -67,6 +66,11 @@ public class TweetLocationLearner {
     return wordGridProbDist; // TODO: return unmodifiable Table
   }
 
+  private void cleanUp() {
+    wordGridCountTable.clear();
+    wordCountMap.clear();
+  }
+  
   private void buildGridProbabilityDistribution(String splitDate) throws SQLException,
       InstantiationException, IllegalAccessException, ClassNotFoundException, IOException {
     Set<String> trainTweetIds = new HashSet<String>();
@@ -205,11 +209,11 @@ public class TweetLocationLearner {
     }
   }
   
-  public double findGridProbabilityGivenWords(Integer grid, String tweet) {
+  public double findGridProbabilityGivenWords(Integer gridId, String tweet) {
     String[] words = tweet.split("\\s+");
-    double logProb = Math.log(gridProbDist.get(grid));
+    double logProb = Math.log(gridProbDist.get(gridId));
     for (String word : words) {
-      Double wordGridProb = wordGridProbDist.get(word, grid);
+      Double wordGridProb = wordGridProbDist.get(word, gridId);
       if (wordGridProb != null && wordGridProb != 0) {
         logProb += Math.log(wordGridProb);
       }

@@ -12,6 +12,14 @@ import java.util.Set;
 
 import edu.ncsu.mas.platys.lbsn.db.TweetDbHandler;
 
+
+/**
+ * Works, but slow. User TweetLocationParallelTester, instead.
+ * 
+ * @author pmuruka
+ *
+ */
+@Deprecated
 public class TweetLocationTester {
   private final Map<String, Integer> tweetIdToGridIdMap;
   private final Set<Long> userIds;

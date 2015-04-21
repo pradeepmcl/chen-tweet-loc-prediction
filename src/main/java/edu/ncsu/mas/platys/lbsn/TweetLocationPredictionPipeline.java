@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 public class TweetLocationPredictionPipeline {
 
@@ -22,7 +23,8 @@ public class TweetLocationPredictionPipeline {
   private static final DateFormat df = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
   
   public static void main(String[] args) throws IOException, InstantiationException,
-      IllegalAccessException, ClassNotFoundException, SQLException {
+      IllegalAccessException, ClassNotFoundException, SQLException, InterruptedException,
+      ExecutionException {
     String inUserIdsFilename = args[0];
     String inGridFilename = args[1];
     String splitDate = args[2]; // YYYY-MM-DD
@@ -30,7 +32,7 @@ public class TweetLocationPredictionPipeline {
     String outGridDistFilename = args[3];
     String ouWordCountsFilename = args[4];
     String outPredictionsFilename = args[5];
-    
+
     String gridProbDistFilename = null;
     String wordGridProbDistFilename = null;
     if (args.length > 6) {
@@ -51,10 +53,11 @@ public class TweetLocationPredictionPipeline {
     }
     System.out.println("Ended training at " + df.format(Calendar.getInstance().getTime()));
 
-    TweetLocationTester tester = new TweetLocationTester(Collections.unmodifiableSet(userIds),
-        Collections.unmodifiableMap(tweetIdToGridIdMap));
+    TweetLocationParallelTester tester = new TweetLocationParallelTester(
+        Collections.unmodifiableSet(userIds), Collections.unmodifiableMap(tweetIdToGridIdMap),
+        learner);
     System.out.println("Strating testing at " + df.format(Calendar.getInstance().getTime()));
-    tester.test(learner, splitDate, outPredictionsFilename);
+    tester.test(splitDate, outPredictionsFilename);
     System.out.println("Ended testing at " + df.format(Calendar.getInstance().getTime()));
   }
 
