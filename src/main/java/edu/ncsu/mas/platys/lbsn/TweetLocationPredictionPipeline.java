@@ -19,6 +19,7 @@ public class TweetLocationPredictionPipeline {
 
   private static final Set<Long> userIds = new HashSet<Long>();
   private static final Map<String, Integer> tweetIdToGridIdMap = new HashMap<String, Integer>();
+  private static final Map<Integer, Integer> gridIdToNeighborhoodIdMap = new HashMap<Integer, Integer>();
 
   private static final DateFormat df = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
   
@@ -27,33 +28,40 @@ public class TweetLocationPredictionPipeline {
       ExecutionException {
     String inUserIdsFilename = args[0];
     String inGridFilename = args[1];
-    String splitDate = args[2]; // YYYY-MM-DD
+    String inNeighborhoodFilename = args[2];
+    String splitDate = args[3]; // YYYY-MM-DD
 
-    String outGridDistFilename = args[3];
-    String ouWordCountsFilename = args[4];
-    String outPredictionsFilename = args[5];
+    String outGridDistFilename = args[4];
+    String outNeighborhoodDistFilename = args[5];
+    String outWordGridDistFilename = args[6];
+    String outWordNeighborhoodDistFilename = args[7];
+    String outPredictionsFilename = args[8];
 
     String gridProbDistFilename = null;
     String wordGridProbDistFilename = null;
-    if (args.length > 6) {
-      gridProbDistFilename = args[6];
-      wordGridProbDistFilename = args[7];
+    String wordNeighborhoodProbDistFilename = null;
+    if (args.length > 9) {
+      gridProbDistFilename = args[9];
+      wordGridProbDistFilename = args[10];
+      wordNeighborhoodProbDistFilename = args[11];
     }
 
     readUserIds(inUserIdsFilename);
     readTweetIdToGridId(inGridFilename);
+    readGridIdToNeighborhoodId(inNeighborhoodFilename);
 
-    TweetLocationLearner learner = new TweetLocationLearner(Collections.unmodifiableSet(userIds),
-        Collections.unmodifiableMap(tweetIdToGridIdMap));
+    TweetLocationLearner2 learner = new TweetLocationLearner2(Collections.unmodifiableSet(userIds),
+        Collections.unmodifiableMap(tweetIdToGridIdMap), Collections.unmodifiableMap(gridIdToNeighborhoodIdMap));
     System.out.println("Strating training at " + df.format(Calendar.getInstance().getTime()));
     if (gridProbDistFilename != null && wordGridProbDistFilename != null) {
-      learner.readModelFromFiles(gridProbDistFilename, wordGridProbDistFilename);
+      learner.readModelFromFiles(gridProbDistFilename, wordGridProbDistFilename, wordNeighborhoodProbDistFilename);
     } else {
-      learner.train(splitDate, outGridDistFilename, ouWordCountsFilename);
+      learner.train(splitDate, outGridDistFilename, outNeighborhoodDistFilename,
+          outWordGridDistFilename, outWordNeighborhoodDistFilename);
     }
     System.out.println("Ended training at " + df.format(Calendar.getInstance().getTime()));
 
-    TweetLocationParallelTester tester = new TweetLocationParallelTester(
+    TweetLocationParallelTester2 tester = new TweetLocationParallelTester2(
         Collections.unmodifiableSet(userIds), Collections.unmodifiableMap(tweetIdToGridIdMap),
         learner);
     System.out.println("Strating testing at " + df.format(Calendar.getInstance().getTime()));
@@ -74,6 +82,24 @@ public class TweetLocationPredictionPipeline {
       }
     }
     System.out.println("tweetIdToGridIdMap size: " + tweetIdToGridIdMap.size());
+  }
+  
+  private static void readGridIdToNeighborhoodId(String inNeighborhoodFilename)
+      throws FileNotFoundException, IOException {
+    try (BufferedReader br = new BufferedReader(new FileReader(inNeighborhoodFilename))) {
+      for (String line = br.readLine(); line != null; line = br.readLine()) {
+        if (line.trim().isEmpty()) {
+          continue;
+        }
+        // Line format: tweetID,lat1,lon1,lat2,lon2,gridId1,gridId2,...
+        String[] lineParts = line.split(",");
+        Integer gridId = Integer.parseInt(lineParts[0]);
+        for (int i = 5; i < lineParts.length; i++) {
+          gridIdToNeighborhoodIdMap.put(gridId, Integer.parseInt(lineParts[i]));
+        }
+      }
+    }
+    System.out.println("GridIdToNeighborhoodIdMap size: " + gridIdToNeighborhoodIdMap.size());
   }
 
   private static void readUserIds(String inUserIdsFilename) throws FileNotFoundException,
