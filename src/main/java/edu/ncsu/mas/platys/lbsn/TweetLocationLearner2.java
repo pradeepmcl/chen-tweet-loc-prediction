@@ -27,6 +27,7 @@ import com.google.common.collect.Table;
 
 import edu.ncsu.mas.platys.lbsn.db.TweetDbHandler;
 
+// TODO: This class has duplicate code; requires some intelligent refactoring.
 public class TweetLocationLearner2 {
 
   private final Set<Long> userIds;
@@ -70,9 +71,25 @@ public class TweetLocationLearner2 {
   public Map<Integer, Double> getGridProbabDist() {
     return Collections.unmodifiableMap(gridProbDist);
   }
+  
+  public Set<Integer> getAllGridIds() {
+    return Collections.unmodifiableSet(gridProbDist.keySet());
+  }
 
+  public Map<Integer, Double> getNeighborhoodProbabDist() {
+    return Collections.unmodifiableMap(neighborhoodProbDist);
+  }
+  
+  public Set<Integer> getAllNeighborhoodIds() {
+    return Collections.unmodifiableSet(neighborhoodProbDist.keySet());
+  }
+  
   public Table<String, Integer, Double> getWordGridProbDist() {
     return wordGridProbDist; // TODO: return unmodifiable Table
+  }
+  
+  public Table<String, Integer, Double> getWordNeighborhoodProbDist() {
+    return wordNeighborhoodProbDist; // TODO: return unmodifiable Table
   }
 
   private void cleanUp() {
@@ -289,21 +306,34 @@ public class TweetLocationLearner2 {
     }
   }
   
-  public double findGridProbabilityGivenWords(Integer gridId, String tweet) {
+  public double findGridProbabilityGivenWords(Integer gridId, Integer neighborhoodId,
+      double lambda, String tweet) {
+    // Find probability for grid
     String[] words = tweet.split("\\s+");
-    double logProb = Math.log(gridProbDist.get(gridId));
+    double logGridProb = Math.log(gridProbDist.get(gridId));
     for (String word : words) {
       Double wordGridProb = wordGridProbDist.get(word, gridId);
       if (wordGridProb != null && wordGridProb != 0) {
-        logProb += Math.log(wordGridProb);
+        logGridProb += Math.log(wordGridProb);
       }
     }
-    return logProb;
+    
+    // TODO: Incorporate \mu in the computation of logNeighborhoodProb
+    double logNeighborhoodProb = 0.0;
+    Double neighborhoodProb = neighborhoodProbDist.get(neighborhoodId);
+    if (neighborhoodProb != null && neighborhoodProb != 0) {
+      logNeighborhoodProb = Math.log(neighborhoodProb);
+      return (lambda * logGridProb) + (1 - lambda) * logNeighborhoodProb; 
+    } else { // TODO: Check these again
+      return logGridProb;
+    }
   }
   
-  public void readModelFromFiles(String gridProbDistFilename, String wordGridProbDistFilename,
-      String wordNeighborhoodProbDistFilename) throws FileNotFoundException, IOException {
+  public void readModelFromFiles(String gridProbDistFilename, String neighborhoodProbDistFilename,
+      String wordGridProbDistFilename, String wordNeighborhoodProbDistFilename)
+      throws FileNotFoundException, IOException {
     readGridProbDist(gridProbDistFilename);
+    readNeighborhoodProbDist(neighborhoodProbDistFilename);
     readWordGridProbDist(wordGridProbDistFilename);
     readWordNeighborhoodProbDist(wordNeighborhoodProbDistFilename);
   }
@@ -313,6 +343,15 @@ public class TweetLocationLearner2 {
       for (String line = br.readLine(); line != null; line = br.readLine()) {
         String[] lineParts = line.split(",");
         gridProbDist.put(Integer.parseInt(lineParts[0]), Double.parseDouble(lineParts[1]));
+      }
+    }
+  }
+  
+  public void readNeighborhoodProbDist(String neighborhoodProbDistFilename) throws IOException {
+    try (BufferedReader br = new BufferedReader(new FileReader(neighborhoodProbDistFilename))) {
+      for (String line = br.readLine(); line != null; line = br.readLine()) {
+        String[] lineParts = line.split(",");
+        neighborhoodProbDist.put(Integer.parseInt(lineParts[0]), Double.parseDouble(lineParts[1]));
       }
     }
   }
