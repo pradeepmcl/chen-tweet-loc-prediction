@@ -29,9 +29,12 @@ import edu.ncsu.mas.platys.lbsn.db.TweetDbHandler;
 
 public class TweetLocationLearner2 {
 
+  private static final int wordMinFrequency = 30;
+  
   private final Set<Long> userIds;
   private final Map<String, Integer> tweetIdToGridIdMap;
   private final Map<Integer, Integer> gridIdToNeighborhoodMap;
+  private final Set<String> localWords;
   
   private final Map<Integer, Double> gridProbDist = new HashMap<Integer, Double>();
   private final Map<Integer, Double> neighborhoodProbDist = new HashMap<Integer, Double>();
@@ -43,10 +46,11 @@ public class TweetLocationLearner2 {
   private final Table<String, Integer, Double> wordNeighborhoodProbDist = HashBasedTable.create();
   
   public TweetLocationLearner2(Set<Long> userIds, Map<String, Integer> tweetIdToGridIdMap,
-      Map<Integer, Integer> gridIdToNeighborhoodMap) {
+      Map<Integer, Integer> gridIdToNeighborhoodMap, Set<String> localWords) {
     this.userIds = userIds;
     this.tweetIdToGridIdMap = tweetIdToGridIdMap;
     this.gridIdToNeighborhoodMap = gridIdToNeighborhoodMap;
+    this.localWords = localWords;
   }
   
   public void train(String splitDate, String outGridDistFilename,
@@ -59,7 +63,7 @@ public class TweetLocationLearner2 {
     writeNeighborhoodProbabilityDistribution(outNeighborhoodDistFilename);
 
     countWordsPerGrid(splitDate);
-    countAndDiscardInfrequentWords(30);
+    countAndDiscardInfrequentWords(wordMinFrequency);
     buildWordAndGridProbabilityDistribution();
     buildWordAndNieghborhoodProbabilityDistribution();
     cleanUp(); // clear unwanted (and space consuming) objects
@@ -98,7 +102,8 @@ public class TweetLocationLearner2 {
     for (String tweetId : trainTweetIds) {
       gridIdToTweetIdMap.put(tweetIdToGridIdMap.get(tweetId), tweetId);
     }
-    System.out.println("gridIdToTweetIdMap size: " + gridIdToTweetIdMap.size());
+    System.out.println("gridIdToTweetIdMap.keySet size: " + gridIdToTweetIdMap.keySet().size());
+    System.out.println("gridIdToTweetIdMap.values size: " + gridIdToTweetIdMap.values().size());
 
     for (Integer gridId : gridIdToTweetIdMap.keys()) {
       Set<String> tweetIds = gridIdToTweetIdMap.get(gridId);
@@ -107,10 +112,13 @@ public class TweetLocationLearner2 {
     System.out.println("gridProbabDist size: " + gridProbDist.size());
     
     SetMultimap<Integer, Integer> neighborhoodIdToGridIdMap = HashMultimap.create();
-    for (Integer gridId : gridIdToNeighborhoodMap.keySet()) {
+    for (Integer gridId : gridProbDist.keySet()) {
       neighborhoodIdToGridIdMap.put(gridIdToNeighborhoodMap.get(gridId), gridId);
     }
-    System.out.println("gridIdToNeighborhoodMap size: " + gridIdToNeighborhoodMap.size());
+    System.out.println("neighborhoodIdToGridIdMap.keySet size: "
+        + gridIdToNeighborhoodMap.keySet().size());
+    System.out.println("neighborhoodIdToGridIdMap.values size: "
+        + gridIdToNeighborhoodMap.values().size());
     
     for (Integer neighborhoodId : neighborhoodIdToGridIdMap.keys()) {
       Set<Integer> gridIds = neighborhoodIdToGridIdMap.get(neighborhoodId);
@@ -194,7 +202,7 @@ public class TweetLocationLearner2 {
       for (Integer wordGridCount : wordGridCounts) {
         count += wordGridCount;
       }
-      if (count < 50) {
+      if (count < minCount) {
         wordItr.remove();
       } else {
         wordCountMap.put(word, count);
@@ -293,9 +301,11 @@ public class TweetLocationLearner2 {
     String[] words = tweet.split("\\s+");
     double logProb = Math.log(gridProbDist.get(gridId));
     for (String word : words) {
-      Double wordGridProb = wordGridProbDist.get(word, gridId);
-      if (wordGridProb != null && wordGridProb != 0) {
-        logProb += Math.log(wordGridProb);
+      if (localWords != null && localWords.contains(word)) {
+        Double wordGridProb = wordGridProbDist.get(word, gridId);
+        if (wordGridProb != null && wordGridProb != 0) {
+          logProb += Math.log(wordGridProb);
+        }
       }
     }
     return logProb;
@@ -341,7 +351,7 @@ public class TweetLocationLearner2 {
   public void readWordNeighborhoodProbDist(String wordNeighborhoodProbDistFilename) throws IOException {
     List<Integer> neighborhoodIds = new ArrayList<Integer>();
     try (BufferedReader br = new BufferedReader(new FileReader(wordNeighborhoodProbDistFilename))) {
-      // Header line has grid IDs.
+      // Header line has neighborhood IDs.
       String line = br.readLine();
       String[] lineParts = line.split(",");
       for (int i = 1; i < lineParts.length; i++) {
@@ -353,7 +363,8 @@ public class TweetLocationLearner2 {
         lineParts = line.split(",");
         String word = lineParts[0];
         for (int i = 1; i < lineParts.length; i++) {
-          wordGridProbDist.put(word, neighborhoodIds.get(i - 1), Double.parseDouble(lineParts[i]));
+          wordNeighborhoodProbDist.put(word, neighborhoodIds.get(i - 1),
+              Double.parseDouble(lineParts[i]));
         }
       }
     }
