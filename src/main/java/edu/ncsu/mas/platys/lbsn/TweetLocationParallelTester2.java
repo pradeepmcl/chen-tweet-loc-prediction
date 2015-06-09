@@ -21,16 +21,18 @@ import edu.ncsu.mas.platys.lbsn.db.TweetDbHandler;
 public class TweetLocationParallelTester2 {
   private final Map<String, Integer> tweetIdToGridIdMap;
   private final Set<Long> userIds;
+  private final Map<Integer, Integer> gridIdToNeighborhoodIdMap;
   
   private final TweetLocationLearner2 learner;
-  private final Map<Integer, Double> gridProbabDist;
+  private final Set<Integer> gridIds;
   
   public TweetLocationParallelTester2(Set<Long> userIds, Map<String, Integer> tweetIdToGridIdMap,
-      TweetLocationLearner2 learner) {
+      Map<Integer, Integer> gridIdToNeighborhoodIdMap, TweetLocationLearner2 learner) {
     this.tweetIdToGridIdMap = tweetIdToGridIdMap;
     this.userIds = userIds;
+    this.gridIdToNeighborhoodIdMap = gridIdToNeighborhoodIdMap;
     this.learner = learner;
-    this.gridProbabDist = learner.getGridProbabDist();
+    this.gridIds = learner.getAllGridIds();
   }
   
   public void test(String splitDate, String outPredictionsFilename)
@@ -95,8 +97,9 @@ public class TweetLocationParallelTester2 {
     @Override
     public Grid call() throws Exception {
       Grid predictedGrid = new Grid(userId, tweetId);
-      for (Integer gridId : gridProbabDist.keySet()) {
-        double tempPredictedProb = learner.findGridProbabilityGivenWords(gridId, content);
+      for (Integer gridId : gridIds) {
+        double tempPredictedProb = learner.findGridProbabilityGivenWords(gridId,
+            gridIdToNeighborhoodIdMap.get(gridId), 0.6, content);
         if (tempPredictedProb > predictedGrid.gridProbability) {
           predictedGrid.setPredictedGrid(gridId, tempPredictedProb);
         }

@@ -28,6 +28,7 @@ public class TweetLocationPredictionPipeline {
       IllegalAccessException, ClassNotFoundException, SQLException, InterruptedException,
       ExecutionException {
     String inUserIdsFilename = args[0];
+    
     String inGridFilename = args[1];
     String inNeighborhoodFilename = args[2];
     String inLocalWordsParamsFilename = args[3];
@@ -40,8 +41,10 @@ public class TweetLocationPredictionPipeline {
     String outPredictionsFilename = args[9];
 
     String gridProbDistFilename = null;
+    String neighborhoodProbDistFilename = null;
     String wordGridProbDistFilename = null;
     String wordNeighborhoodProbDistFilename = null;
+
     if (args.length > 10) {
       gridProbDistFilename = args[10];
       wordGridProbDistFilename = args[11];
@@ -59,8 +62,8 @@ public class TweetLocationPredictionPipeline {
         Collections.unmodifiableSet(localWords));
     System.out.println("Strating training at " + df.format(Calendar.getInstance().getTime()));
     if (gridProbDistFilename != null && wordGridProbDistFilename != null) {
-      learner.readModelFromFiles(gridProbDistFilename, wordGridProbDistFilename,
-          wordNeighborhoodProbDistFilename);
+      learner.readModelFromFiles(gridProbDistFilename, neighborhoodProbDistFilename,
+          wordGridProbDistFilename, wordNeighborhoodProbDistFilename);
     } else {
       learner.train(splitDate, outGridDistFilename, outNeighborhoodDistFilename,
           outWordGridDistFilename, outWordNeighborhoodDistFilename);
@@ -69,7 +72,7 @@ public class TweetLocationPredictionPipeline {
 
     TweetLocationParallelTester2 tester = new TweetLocationParallelTester2(
         Collections.unmodifiableSet(userIds), Collections.unmodifiableMap(tweetIdToGridIdMap),
-        learner);
+        Collections.unmodifiableMap(gridIdToNeighborhoodIdMap), learner);
     System.out.println("Strating testing at " + df.format(Calendar.getInstance().getTime()));
     tester.test(splitDate, outPredictionsFilename);
     System.out.println("Ended testing at " + df.format(Calendar.getInstance().getTime()));
