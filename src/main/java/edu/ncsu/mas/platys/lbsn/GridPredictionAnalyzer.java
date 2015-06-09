@@ -108,9 +108,9 @@ public class GridPredictionAnalyzer {
     }
   }
 
-  private static void readUsers(String usersWithHistoryFilename, Set<Long> userIds)
+  private static void readUsers(String usersFilename, Set<Long> userIds)
       throws FileNotFoundException, IOException {
-    try (BufferedReader br = new BufferedReader(new FileReader(usersWithHistoryFilename))) {
+    try (BufferedReader br = new BufferedReader(new FileReader(usersFilename))) {
       for (String line = br.readLine(); line != null; line = br.readLine()) {
         if (line.trim().isEmpty()) {
           continue;
