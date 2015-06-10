@@ -101,16 +101,19 @@ public class TweetLocationLearner2 {
     wordCountMap.clear();
   }
   
-  private void buildNeighborhoodAndGridProbabilityDistribution(String splitDate) throws SQLException,
-      InstantiationException, IllegalAccessException, ClassNotFoundException, IOException {
+  private void buildNeighborhoodAndGridProbabilityDistribution(String splitDate)
+      throws SQLException, InstantiationException, IllegalAccessException, ClassNotFoundException,
+      IOException {
     Set<String> trainTweetIds = new HashSet<String>();
     try (TweetDbHandler dbHandler = new TweetDbHandler();
         Statement st = dbHandler.getConnection().createStatement();
         ResultSet rs = st.executeQuery("select user_id, tweet_id from tweet_venue_new "
             + "where creation_time < '" + splitDate + "' ")) {
       while (rs.next()) {
-        if (userIds.contains(rs.getLong(1))) {
-          trainTweetIds.add(rs.getString(2));
+        Long userId = rs.getLong(1);
+        String tweetId = rs.getString(2);
+        if (userIds.contains(userId) && tweetIdToGridIdMap.containsKey(tweetId)) {
+          trainTweetIds.add(tweetId);
         }
       }
     }
@@ -185,8 +188,8 @@ public class TweetLocationLearner2 {
           }
           do {
             long userId = rs.getLong(1);
-            if (userIds.contains(userId)) {
-              String tweetId = rs.getString(2);
+            String tweetId = rs.getString(2);
+            if (userIds.contains(userId) && tweetIdToGridIdMap.containsKey(tweetId)) {
               String[] words = rs.getString(3).split("\\s+");
               for (String word : words) {
                 Integer wordCount = wordGridCountTable.get(word,

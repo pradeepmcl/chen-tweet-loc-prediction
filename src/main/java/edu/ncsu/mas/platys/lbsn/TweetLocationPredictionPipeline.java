@@ -31,28 +31,30 @@ public class TweetLocationPredictionPipeline {
     
     String inGridFilename = args[1];
     String inNeighborhoodFilename = args[2];
-    String inLocalWordsParamsFilename = args[3];
-    String splitDate = args[4]; // YYYY-MM-DD
+    String inStateFilterFilename = args[3];
+    String inLocalWordsParamsFilename = args[4];
+    String splitDate = args[5]; // YYYY-MM-DD
 
-    String outGridDistFilename = args[5];
-    String outNeighborhoodDistFilename = args[6];
-    String outWordGridDistFilename = args[7];
-    String outWordNeighborhoodDistFilename = args[8];
-    String outPredictionsFilename = args[9];
+    String outGridDistFilename = args[6];
+    String outNeighborhoodDistFilename = args[7];
+    String outWordGridDistFilename = args[8];
+    String outWordNeighborhoodDistFilename = args[9];
+    String outPredictionsFilename = args[10];
 
     String gridProbDistFilename = null;
     String neighborhoodProbDistFilename = null;
     String wordGridProbDistFilename = null;
     String wordNeighborhoodProbDistFilename = null;
 
-    if (args.length > 10) {
-      gridProbDistFilename = args[10];
-      wordGridProbDistFilename = args[11];
-      wordNeighborhoodProbDistFilename = args[12];
+    if (args.length > 11) {
+      gridProbDistFilename = args[11];
+      neighborhoodProbDistFilename = args[12];
+      wordGridProbDistFilename = args[13];
+      wordNeighborhoodProbDistFilename = args[14];
     }
 
-    readUserIds(inUserIdsFilename);
-    readTweetIdToGridId(inGridFilename);
+    readUserIds(inUserIdsFilename, inStateFilterFilename);
+    readTweetIdToGridId(inGridFilename, inStateFilterFilename);
     readGridIdToNeighborhoodId(inNeighborhoodFilename);
     readLocalWords(inLocalWordsParamsFilename);
 
@@ -78,8 +80,21 @@ public class TweetLocationPredictionPipeline {
     System.out.println("Ended testing at " + df.format(Calendar.getInstance().getTime()));
   }
 
-  private static void readTweetIdToGridId(String inGridFilename) throws FileNotFoundException,
-      IOException {
+  private static void readTweetIdToGridId(String inGridFilename, String stateFilterFilename)
+      throws FileNotFoundException, IOException {
+    Set<String> tweetsToRetain = new HashSet<String>();
+    try (BufferedReader br = new BufferedReader(new FileReader(stateFilterFilename))) {
+      for (String line = br.readLine(); line != null; line = br.readLine()) {
+        if (line.trim().isEmpty()) {
+          continue;
+        }
+        // Line format: tweetID,userId
+        String[] lineParts = line.split(",");
+        tweetsToRetain.add(lineParts[0]);
+      }
+    }
+    System.out.println("tweetsToRetain size: " + tweetsToRetain.size()); // TODO: Remove
+    
     try (BufferedReader br = new BufferedReader(new FileReader(inGridFilename))) {
       for (String line = br.readLine(); line != null; line = br.readLine()) {
         if (line.trim().isEmpty()) {
@@ -87,7 +102,9 @@ public class TweetLocationPredictionPipeline {
         }
         // Line format: tweetID,latitude,longitude,userID,gridID
         String[] lineParts = line.split(",");
-        tweetIdToGridIdMap.put(lineParts[0], Integer.parseInt(lineParts[4]));
+        if (tweetsToRetain.contains(lineParts[0])) {
+          tweetIdToGridIdMap.put(lineParts[0], Integer.parseInt(lineParts[4]));
+        }
       }
     }
     System.out.println("tweetIdToGridIdMap size: " + tweetIdToGridIdMap.size());
@@ -111,15 +128,30 @@ public class TweetLocationPredictionPipeline {
     System.out.println("GridIdToNeighborhoodIdMap size: " + gridIdToNeighborhoodIdMap.size());
   }
 
-  private static void readUserIds(String inUserIdsFilename) throws FileNotFoundException,
-      IOException {
+  private static void readUserIds(String inUserIdsFilename, String stateFilterFilename)
+      throws FileNotFoundException, IOException {
+    Set<String> usersToRetain = new HashSet<String>();
+    try (BufferedReader br = new BufferedReader(new FileReader(stateFilterFilename))) {
+      for (String line = br.readLine(); line != null; line = br.readLine()) {
+        if (line.trim().isEmpty()) {
+          continue;
+        }
+        // Line format: tweetID,userId
+        String[] lineParts = line.split(",");
+        usersToRetain.add(lineParts[1]);
+      }
+    }
+    
     try (BufferedReader br = new BufferedReader(new FileReader(inUserIdsFilename))) {
       for (String line = br.readLine(); line != null; line = br.readLine()) {
         if (line.trim().isEmpty()) {
           continue;
         }
         // Line format: userId
-        userIds.add(Long.parseLong(line.trim()));
+        String userId = line.trim();
+        if (usersToRetain.contains(userId)) {
+          userIds.add(Long.parseLong(userId));
+        }
       }
     }
     System.out.println("userIds size: " + userIds.size());

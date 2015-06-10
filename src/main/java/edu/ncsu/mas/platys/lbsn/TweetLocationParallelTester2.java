@@ -59,8 +59,8 @@ public class TweetLocationParallelTester2 {
           int tasksSubmitted = 0;
           do {
             long userId = rs.getLong(1);
-            if (userIds.contains(userId)) {
-              String tweetId = rs.getString(2);
+            String tweetId = rs.getString(2);
+            if (userIds.contains(userId) && tweetIdToGridIdMap.containsKey(tweetId)) {
               String content = rs.getString(3);
               gridFinderCompletionSerive.submit(new GridFinder(userId, tweetId, content));
               tasksSubmitted++;
